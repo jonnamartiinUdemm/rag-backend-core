@@ -1,0 +1,22 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+
+# --- Mac OS  ---
+.DS_Store
+
+# --- Docker & Data ---
+
+qdrant_data/
+
+celerybeat-schedule
+
+# --- IDEs ---
+.vscode/
+.idea/

@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # API service
+  web:
+    build: .  
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"  
+    volumes:
+      - .:/app  
+    depends_on:
+      - redis  # It will wait for Redis to be ready
+
+  # WORKER service celery
+  worker:
+    build: .  
+    command: celery -A app.core.celery_app worker --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+
+  # Redis service
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  # Qdrant service
+  qdrant:
+    image: qdrant/qdrant:v1.7.0
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+# Persistent volumes
+# This ensures that if you delete the containers, the Qdrant data is not lost.
+volumes:
+  qdrant_data:
