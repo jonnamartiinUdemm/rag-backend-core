@@ -1,4 +1,16 @@
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-celery==5.3.6
-redis==5.0.1
+fastapi==0.111.0
+uvicorn==0.29.0
+python-multipart==0.0.9
+celery==5.4.0
+redis==5.0.4
+# --- LA TRINIDAD DE QDRANT ---
+# 1. El cliente nativo estable con soporte .search()
+qdrant-client==1.9.1
+# 2. El conector moderno oficial
+langchain-qdrant==0.1.0
+# 3. Componentes base compatibles
+langchain-community==0.2.0
+langchain-core==0.2.0
+fastembed==0.2.7
+pydantic==2.7.1
+requests==2.31.0

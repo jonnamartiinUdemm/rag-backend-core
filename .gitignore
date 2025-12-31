@@ -1,22 +1,18 @@
 # --- Python ---
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
+*.py[cod]
+*$py.class
 venv/
+.venv/
 .env
 
-# --- Mac OS  ---
-.DS_Store
-
 # --- Docker & Data ---
+app/data/qdrant/
+app/data/redis/
+app/data/uploads/*
+!app/data/uploads/.gitkeep
 
-qdrant_data/
-
-celerybeat-schedule
-
-# --- IDEs ---
+# --- IDEs & System ---
+.DS_Store
 .vscode/
 .idea/
