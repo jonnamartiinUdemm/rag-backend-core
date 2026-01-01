@@ -16,3 +16,6 @@ app/data/uploads/*
 .DS_Store
 .vscode/
 .idea/
+
+# --- Debug ---
+debug_inspection.py
