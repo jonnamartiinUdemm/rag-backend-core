@@ -12,3 +12,4 @@ pydantic==2.7.1
 requests==2.31.0
 # Librería para procesar PDFs
 pypdf==4.2.0
+langchain-ollama==0.1.1

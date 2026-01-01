@@ -3,19 +3,20 @@ version: '3.8'
 services:
   # API service
   web:
-    build: .  
+    build: .
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
-      - "8000:8000"  
+      - "8000:8000"
     volumes:
       - .:/app
       - ./data:/app/data
     depends_on:
-      - redis  # It will wait for Redis to be ready
+      - redis
+      - ollama # Web now waits for Ollama to start
 
   # WORKER service celery
   worker:
-    build: .  
+    build: .
     command: celery -A app.core.celery_app worker --loglevel=info
     volumes:
       - .:/app
@@ -29,7 +30,7 @@ services:
     ports:
       - "6379:6379"
 
-  # Qdrant service
+  # Qdrant service (Vector DB)
   qdrant:
     image: qdrant/qdrant:latest
     ports:
@@ -37,7 +38,15 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  # --- NEW SERVICE: OLLAMA (Local AI Brain) ---
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434" # Standard Ollama port
+    volumes:
+      - ollama_data:/root/.ollama
+
 # Persistent volumes
-# This ensures that if you delete the containers, the Qdrant data is not lost.
 volumes:
   qdrant_data:
+  ollama_data:
