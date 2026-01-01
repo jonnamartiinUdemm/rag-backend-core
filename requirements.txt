@@ -4,12 +4,11 @@ python-multipart==0.0.9
 celery==5.4.0
 redis==5.0.4
 qdrant-client==1.9.1
-langchain-qdrant==0.1.0
-langchain-community==0.2.0
-langchain-core==0.2.0
-fastembed==0.2.7
+langchain-qdrant<0.2.0
+langchain-community<0.3.0
+langchain-core<0.3.0
+langchain-ollama==0.1.1
+fastembed==0.3.1
 pydantic==2.7.1
 requests==2.31.0
-# Librería para procesar PDFs
 pypdf==4.2.0
-langchain-ollama==0.1.1
