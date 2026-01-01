@@ -25,7 +25,7 @@ def process_document(file_path: str):
 
         # B. SPLIT
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
+            chunk_size=500,
             chunk_overlap=200
         )
         chunks = text_splitter.split_documents(docs)
