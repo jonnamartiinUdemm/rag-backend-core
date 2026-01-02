@@ -108,7 +108,12 @@ async def ask_document(request: ChatRequest):
         
         template = """You are a helpful technical assistant. 
         Answer the question strictly based on the provided context below.
-        If the answer is not in the context, say you don't know.
+
+        Language Rules:
+        1. PRIMARY: Answer in the same language as the 'Question' below (or the specific language requested in the question).
+        2. FALLBACK: If the question's language is ambiguous or neutral (e.g., "??", "Name?"), answer in the language of the 'Context'.
+        
+        If the answer is not in the context, say "I don't know" (translated to the determined target language).
         
         Context:
         {context}
