@@ -1,82 +1,114 @@
 import logging
+import cohere
+from typing import List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List
 
-# --- LangChain & Ollama Imports ---
-from langchain_ollama import ChatOllama
+# LangChain & Config
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
-
-# --- Vector DB Imports ---
-from qdrant_client import QdrantClient
 from langchain_qdrant import Qdrant
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
-# Configure Logger
+from app.core.config import get_settings
+from app.services.llm_factory import get_llm
+
+# Setup Logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+settings = get_settings()
 
-# --- GLOBAL CONFIGURATION ---
-# Embeddings: Must match the model used in the ingestion worker
-EMBEDDING_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-logger.info(f"Loading Embedding Model: {EMBEDDING_MODEL_NAME}...")
-embeddings = FastEmbedEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+# Initialize Embeddings once (Global reuse)
+embeddings = FastEmbedEmbeddings(model_name=settings.EMBEDDING_MODEL)
 
-# Qdrant Connection
-qdrant_client = QdrantClient(url="http://qdrant:6333")
+# Initialize Cohere Client (only if API key is present)
+cohere_client = None
+if settings.COHERE_API_KEY:
+    try:
+        cohere_client = cohere.Client(settings.COHERE_API_KEY)
+        logger.info("Cohere Client initialized successfully.")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Cohere: {e}. Reranking will be disabled.")
 
-# --- LLM Configuration ---
-# Generic technical assistant configuration via Ollama
-llm = ChatOllama(
-    model="llama3", 
-    base_url="http://ollama:11434", 
-    temperature=0  # Deterministic answers
-)
-
+# --- API Models ---
 class ChatRequest(BaseModel):
     query: str
 
 class ChatResponse(BaseModel):
     answer: str
+    source_documents: List[str] = [] # Debugging: see what the LLM actually read
 
 @router.post("/ask", response_model=ChatResponse)
 async def ask_document(request: ChatRequest):
-    """
-    Production RAG Endpoint.
-    1. Search vector DB for relevant chunks.
-    2. Generate answer using Ollama based on retrieved context.
-    """
     try:
-        logger.info(f"Received query: {request.query}")
+        logger.info(f"Received query: '{request.query}' | Provider: {settings.LLM_PROVIDER}")
 
         # 1. Connect to Vector Store
+        # We recreate the client per request or use a global one. 
+        # For simplicity in this setup, we connect via LangChain's wrapper.
+        from qdrant_client import QdrantClient
+        client = QdrantClient(url=settings.QDRANT_URL)
+        
         vector_store = Qdrant(
-            client=qdrant_client,
+            client=client,
             collection_name="knowledge_base",
             embeddings=embeddings,
         )
 
-        # 2. Retrieve Documents
-        # Fetching top 10 chunks to ensure sufficient context coverage
-        retriever = vector_store.as_retriever(search_kwargs={"k": 10})
+        # 2. Retrieval Strategy (Fetch "Wide")
+        # If Reranker is enabled, we fetch MORE docs initially (RETRIEVAL_TOP_K e.g., 15)
+        # to ensure the correct answer is somewhere in that list.
+        k_fetch = settings.RETRIEVAL_TOP_K if (settings.USE_RERANKER and cohere_client) else settings.RERANK_TOP_K
+        
+        logger.info(f"Retrieving top {k_fetch} documents from Qdrant...")
+        retriever = vector_store.as_retriever(search_kwargs={"k": k_fetch})
         retrieved_docs: List[Document] = retriever.invoke(request.query)
 
         if not retrieved_docs:
-            logger.warning("No relevant documents found for the query.")
-            return ChatResponse(answer="I could not find any information in the provided documents to answer your question.")
+            return ChatResponse(answer="No relevant information found in the documents.")
 
-        # 3. System Prompt
-        # Purely functional instructions, agnostic to document type.
-        template = """You are a helpful technical assistant designed to read and interpret documents.
+        final_docs = retrieved_docs
+
+        # 3. Reranking Step (Filter "Narrow")
+        if settings.USE_RERANKER and cohere_client:
+            logger.info("Reranking documents with Cohere...")
+            try:
+                # Prepare documents text for Cohere
+                docs_text = [doc.page_content for doc in retrieved_docs]
+                
+                # Call Cohere Rerank API
+                rerank_results = cohere_client.rerank(
+                    model="rerank-multilingual-v3.0", # Excellent for Spanish/English
+                    query=request.query,
+                    documents=docs_text,
+                    top_n=settings.RERANK_TOP_K # Keep only the best (e.g., 3)
+                )
+                
+                # Reconstruct the list of Documents based on Rerank indices
+                ranked_docs = []
+                for result in rerank_results.results:
+                    original_doc = retrieved_docs[result.index]
+                    # Optional: Add the relevance score to metadata for debugging
+                    original_doc.metadata["relevance_score"] = result.relevance_score
+                    ranked_docs.append(original_doc)
+                
+                final_docs = ranked_docs
+                logger.info(f"Rerank complete. Kept top {len(final_docs)} high-quality documents.")
+                
+            except Exception as e:
+                logger.error(f"Cohere Rerank failed: {e}. Falling back to original retrieval order.")
+                # Fallback: Just take the top N from the original list
+                final_docs = retrieved_docs[:settings.RERANK_TOP_K]
+
+        # 4. Generate Answer with Selected LLM
+        llm = get_llm()
         
-        Instructions:
-        1. Answer the user's question based ONLY on the provided context below.
-        2. If the answer is not present in the context, explicitly state that you cannot find the information.
-        3. Do not make up answers or use outside knowledge.
+        template = """You are a helpful technical assistant. 
+        Answer the question strictly based on the provided context below.
+        If the answer is not in the context, say you don't know.
         
         Context:
         {context}
@@ -87,19 +119,22 @@ async def ask_document(request: ChatRequest):
         Answer:"""
         
         prompt = ChatPromptTemplate.from_template(template)
-
-        # 4. Construct the Chain
         chain = prompt | llm | StrOutputParser()
         
-        # Format documents into a single string context
-        context_text = "\n\n".join(doc.page_content for doc in retrieved_docs)
+        # Combine final docs into a single string
+        context_text = "\n\n".join(d.page_content for d in final_docs)
         
-        # 5. Generate Answer
-        logger.info(f"Generating answer with context length: {len(context_text)} chars")
+        # Invoke LLM
         answer = await chain.ainvoke({"context": context_text, "question": request.query})
 
-        return ChatResponse(answer=answer)
+        # Return answer + snippets (first 200 chars) for transparency
+        sources = [f"[{doc.metadata.get('source', 'Unknown')}] {doc.page_content[:200]}..." for doc in final_docs]
+
+        return ChatResponse(
+            answer=answer, 
+            source_documents=sources
+        )
 
     except Exception as e:
-        logger.error(f"Error in RAG pipeline: {e}")
+        logger.error(f"Pipeline Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
