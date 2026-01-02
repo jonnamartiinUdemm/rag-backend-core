@@ -1,116 +1,200 @@
-# 🧠 Local RAG Backend Core
+# RAG Backend Core
 
-![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
-![Ollama](https://img.shields.io/badge/Ollama-Llama_3-000000?style=flat)
-![Qdrant](https://img.shields.io/badge/Qdrant-FF4F64?style=flat)
-![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat)
+![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-A high-performance, privacy-focused **Retrieval-Augmented Generation (RAG)** backend. This system runs entirely offline using local LLMs, optimized for Apple Silicon (M-series) and Linux architectures.
+---
 
-## 🚀 Key Features
+## 🇺🇸 English
 
-- **100% Local Inference:** No dependency on OpenAI or external APIs. Uses **Ollama** running Llama 3.
-- **Privacy First:** Your documents and queries never leave your infrastructure.
-- **Apple Silicon Native:** Docker builds optimized for ARM64 (M1/M2/M3/M4) without emulation.
-- **High-Precision Retrieval:** Optimized chunking strategy (500 chars) for accurate legal and technical document analysis.
-- **Async Processing:** Background PDF ingestion using **Celery** and **Redis**.
+### Description
 
-## 🛠️ Tech Stack
+**RAG Backend Core** is a modular Retrieval-Augmented Generation (RAG) API designed to be flexible and scalable. It supports dynamic switching between **Cloud LLMs** (Gemini 2.5 Flash) and **Local LLMs** (Llama 3 via Ollama) using environment variables, allowing the solution to adapt to different privacy, cost, and performance requirements.
 
-- **API:** FastAPI (Python 3.11)
-- **LLM Engine:** Ollama (Llama 3 8B)
-- **Vector Database:** Qdrant
-- **Embeddings:** FastEmbed (`paraphrase-multilingual-MiniLM-L12-v2`)
-- **Task Queue:** Celery + Redis
-- **Containerization:** Docker Compose
+### Architecture
 
-## 📋 Prerequisites
+The processing pipeline follows this flow:
 
-- **Docker Desktop** (latest version recommended)
-- **Git**
-- **Hardware:**
-  - Minimum: 8GB RAM (16GB recommended for smooth LLM performance).
-  - Apple Silicon (M1+) or modern Intel/AMD CPU.
+```
+Query → FastEmbed → Qdrant (Retrieval Top 50) → Cohere Rerank (Top 20) → LLM Factory → Response
+```
 
-## ⚡ Quick Start
+| Stage | Component | Description |
+|-------|-----------|-------------|
+| **1. Embedding** | FastEmbed | Generates vector embeddings from the user query |
+| **2. Retrieval** | Qdrant | Retrieves the top 50 most relevant documents via vector search |
+| **3. Reranking** | Cohere Rerank | Filters and reorders results, selecting the top 20 most pertinent |
+| **4. Generation** | LLM Factory | Generates the response using Gemini (cloud) or Ollama (local) based on configuration |
 
-### 1. Clone the Repository
+### Installation
+
+#### Step 1: Clone the repository
+
 ```bash
-git clone https://github.com/jonnamartiinUdemm/rag-backend-core
+git clone https://github.com/your-username/rag-backend-core.git
 cd rag-backend-core
 ```
 
-### 2. Build and Start Services
-This will compile the necessary dependencies (including native libraries for ARM64) and start the containers.
+#### Step 2: Configure environment variables
+
+```bash
+cp .env.example .env
+```
+
+Edit the `.env` file and set the required API keys:
+
+```env
+GOOGLE_API_KEY=your_google_api_key_here
+COHERE_API_KEY=your_cohere_api_key_here
+```
+
+#### Step 3: Run with Docker
 
 ```bash
 docker compose up --build -d
 ```
 
-### 3. ⚠️ Critical Step: Download the Brain
-When starting for the first time, the Ollama container is empty. You must download the Llama 3 model manually.
+### Configuration
+
+| Variable | Values | Description |
+|----------|--------|-------------|
+| `LLM_PROVIDER` | `gemini` / `ollama` | Selects the LLM provider to use |
+| `GEMINI_MODEL` | `gemini-2.5-flash-preview-05-20` | Gemini model to use (when `LLM_PROVIDER=gemini`) |
+| `USE_RERANKER` | `true` / `false` | Enables/disables Cohere reranking |
+| `QDRANT_URL` | `http://qdrant:6333` | Connection URL for the Qdrant instance |
+
+### API Usage
+
+#### Endpoint: POST `/chat/ask`
+
+Send a query to the RAG system and get a generated response.
+
+**Request:**
 
 ```bash
-docker compose exec ollama ollama pull llama3
-```
-*Wait for the download (~4.7GB) to complete.*
-
-### 4. Verify Installation
-Check if the API is running by visiting the Swagger documentation:
-- **URL:** [http://localhost:8000/docs](http://localhost:8000/docs)
-
-## 📡 API Usage
-
-### 1. Ingest a Document
-Upload a PDF to be processed by the worker.
-
-**Endpoint:** `POST /api/documents/upload` (Adjust based on your actual upload route)
-
-### 2. Chat with your Documents (RAG)
-Ask questions based on the ingested content.
-
-**Endpoint:** `POST /ask`
-
-```bash
-curl -X 'POST' \
-  'http://localhost:8000/ask' \
-  -H 'accept: application/json' \
-  -H 'Content-Type: application/json' \
+curl -X POST "http://localhost:8000/chat/ask" \
+  -H "Content-Type: application/json" \
   -d '{
-  "query": "What does Article 2 of the Constitution say?"
-}'
+    "question": "What are the benefits of using RAG?",
+    "session_id": "user-session-123"
+  }'
 ```
 
 **Response:**
+
 ```json
 {
-  "answer": "Based on the provided context, Article 2 states that the Federal Government supports the Roman Catholic Apostolic cult."
+  "answer": "The main benefits of using RAG include: 1) More accurate responses based on specific documents, 2) Reduction of model hallucinations, 3) Ability to update knowledge without retraining the model...",
+  "sources": [
+    {
+      "document": "rag-benefits.pdf",
+      "page": 5,
+      "score": 0.92
+    }
+  ],
+  "session_id": "user-session-123"
 }
 ```
 
-## ⚙️ Architecture & Decisions
+---
 
-### Chunking Strategy
-We use a `RecursiveCharacterTextSplitter` with a specific configuration to improve retrieval accuracy for dense documents (like legal texts):
-- **Chunk Size:** `500` characters (Prevents semantic dilution in short articles).
-- **Overlap:** `100` characters (Maintains context between segments).
+## 🇪🇸 Español
 
-### Embeddings
-We use `paraphrase-multilingual-MiniLM-L12-v2`. It is lightweight, runs fast on CPU, and provides excellent semantic search capabilities for both English and Spanish texts.
+### Descripción
 
-## 🐛 Troubleshooting
+**RAG Backend Core** es una API modular de Retrieval-Augmented Generation (RAG) diseñada para ser flexible y escalable. Soporta el cambio dinámico entre **Cloud LLMs** (Gemini 2.5 Flash) y **Local LLMs** (Llama 3 vía Ollama) mediante variables de entorno, permitiendo adaptar la solución a diferentes necesidades de privacidad, costo y rendimiento.
 
-**"Connection refused" to Ollama:**
-Ensure the container is running and the model is loaded:
-```bash
-docker compose logs ollama
+### Arquitectura
+
+El pipeline de procesamiento sigue el siguiente flujo:
+
+```
+Query → FastEmbed → Qdrant (Retrieval Top 50) → Cohere Rerank (Top 20) → LLM Factory → Response
 ```
 
-**Build failures on Mac:**
-If you see `gcc` errors, ensure your `Dockerfile` includes `build-essential`. (Already fixed in the current version).
+| Etapa | Componente | Descripción |
+|-------|------------|-------------|
+| **1. Embedding** | FastEmbed | Genera embeddings vectoriales de la consulta del usuario |
+| **2. Retrieval** | Qdrant | Recupera los 50 documentos más relevantes mediante búsqueda vectorial |
+| **3. Reranking** | Cohere Rerank | Filtra y reordena los resultados, seleccionando los 20 más pertinentes |
+| **4. Generation** | LLM Factory | Genera la respuesta usando Gemini (cloud) u Ollama (local) según configuración |
 
-## 📄 License
-[MIT](LICENSE)
+### Instalación
+
+#### Paso 1: Clonar el repositorio
+
+```bash
+git clone https://github.com/your-username/rag-backend-core.git
+cd rag-backend-core
+```
+
+#### Paso 2: Configurar variables de entorno
+
+```bash
+cp .env.example .env
+```
+
+Edita el archivo `.env` y configura las API keys requeridas:
+
+```env
+GOOGLE_API_KEY=your_google_api_key_here
+COHERE_API_KEY=your_cohere_api_key_here
+```
+
+#### Paso 3: Ejecutar con Docker
+
+```bash
+docker compose up --build -d
+```
+
+### Configuración
+
+| Variable | Valores | Descripción |
+|----------|---------|-------------|
+| `LLM_PROVIDER` | `gemini` / `ollama` | Selecciona el proveedor de LLM a utilizar |
+| `GEMINI_MODEL` | `gemini-2.5-flash-preview-05-20` | Modelo de Gemini a usar (cuando `LLM_PROVIDER=gemini`) |
+| `USE_RERANKER` | `true` / `false` | Activa/desactiva el reranking con Cohere |
+| `QDRANT_URL` | `http://qdrant:6333` | URL de conexión a la instancia de Qdrant |
+
+### Uso de la API
+
+#### Endpoint: POST `/chat/ask`
+
+Envía una consulta al sistema RAG y obtiene una respuesta generada.
+
+**Request:**
+
+```bash
+curl -X POST "http://localhost:8000/chat/ask" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "¿Cuáles son los beneficios de usar RAG?",
+    "session_id": "user-session-123"
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "answer": "Los beneficios principales de usar RAG incluyen: 1) Respuestas más precisas basadas en documentos específicos, 2) Reducción de alucinaciones del modelo, 3) Capacidad de actualizar el conocimiento sin reentrenar el modelo...",
+  "sources": [
+    {
+      "document": "rag-benefits.pdf",
+      "page": 5,
+      "score": 0.92
+    }
+  ],
+  "session_id": "user-session-123"
+}
+```
+
+---
+
+## License / Licencia
+
+This project is licensed under the [MIT License](LICENSE).
+
+Este proyecto está licenciado bajo la [MIT License](LICENSE).
