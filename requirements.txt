@@ -12,3 +12,6 @@ fastembed==0.3.1
 pydantic==2.7.1
 requests==2.31.0
 pypdf==4.2.0
+langchain-google-genai>=0.0.1
+cohere>=5.0.0
+pydantic-settings>=2.0.0
