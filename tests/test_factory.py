@@ -40,3 +40,15 @@ def test_get_llm_raises_error_on_invalid_provider():
         with pytest.raises(ValueError) as excinfo:
             get_llm()
         assert "Unsupported LLM_PROVIDER" in str(excinfo.value)
+
+def test_missing_google_api_key_raises_error():
+    """Tests that the factory raises a ValueError if GOOGLE_API_KEY is missing for gemini."""
+    missing_key_settings = MagicMock()
+    missing_key_settings.LLM_PROVIDER = "gemini"
+    missing_key_settings.GOOGLE_API_KEY = None
+    
+    with patch("app.services.llm_factory.settings", missing_key_settings):
+        # Assert that it raises ValueError
+        with pytest.raises(ValueError) as excinfo:
+            get_llm()
+        assert "GOOGLE_API_KEY is missing in configuration." in str(excinfo.value)
