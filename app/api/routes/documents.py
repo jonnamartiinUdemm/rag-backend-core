@@ -2,6 +2,8 @@ import shutil
 import os
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from app.tasks.tasks import process_document
+from celery.result import AsyncResult
+from app.core.celery_app import celery_app
 
 
 router = APIRouter()
@@ -23,3 +25,16 @@ def upload_document(file: UploadFile = File(...)):
 
     task = process_document.delay(file_path)
     return {"filename": file.filename, "file_path": file_path, "task_id": task.id, "status": "File uploaded successfully. Ready for processing."}
+
+@router.get("/status/{task_id}")
+def get_task_status(task_id: str):
+    task_result = celery_app.AsyncResult(task_id)
+    if not task_result:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    response = {
+        "task_id": task_id,
+        "status": task_result.status,
+        "result": task_result.result if task_result.ready() else None
+    }
+    return response
