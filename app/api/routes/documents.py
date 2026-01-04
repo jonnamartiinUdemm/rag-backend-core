@@ -22,5 +22,4 @@ def upload_document(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Failed to upload file: {str(e)}")
 
     task = process_document.delay(file_path)
-    return {"filename": file.filename, "file_path": file_path, "status": "File uploaded successfully. Ready for processing."}
-
+    return {"filename": file.filename, "file_path": file_path, "task_id": task.id, "status": "File uploaded successfully. Ready for processing."}
