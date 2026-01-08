@@ -15,7 +15,8 @@ def get_llm() -> BaseChatModel:
         return ChatOllama(
             model=settings.OLLAMA_MODEL,
             base_url=settings.OLLAMA_BASE_URL,
-            temperature=0
+            temperature=0,
+            timeout=settings.LLM_TIMEOUT  # Configurable timeout
         )
     
     elif provider == "gemini":
@@ -25,7 +26,9 @@ def get_llm() -> BaseChatModel:
         return ChatGoogleGenerativeAI(
             model=settings.GEMINI_MODEL,
             google_api_key=settings.GOOGLE_API_KEY,
-            temperature=0
+            temperature=0,
+            # Gemini transport config or handled via asyncio timeout in route
+            transport="rest"
         )
     
     else:

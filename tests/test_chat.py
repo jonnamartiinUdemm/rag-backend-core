@@ -13,6 +13,8 @@ mock_settings.USE_RERANKER = False
 mock_settings.RETRIEVAL_TOP_K = 5
 mock_settings.RERANK_TOP_K = 3
 mock_settings.LLM_PROVIDER = "ollama"
+mock_settings.LLM_TIMEOUT = 60.0
+mock_settings.CONNECT_TIMEOUT = 5.0
 
 @patch("app.api.routes.chat.get_settings")
 @patch("app.api.routes.chat.get_llm")
@@ -67,10 +69,8 @@ def test_ask_document_no_documents(mock_qdrant_client, mock_qdrant, mock_get_set
     """Tests query with no relevant documents."""
     mock_get_settings.return_value = mock_settings
     
-    # Mock QdrantClient
     mock_qdrant_client.return_value = MagicMock()
     
-    # Mock Qdrant with no docs
     mock_vector_store = MagicMock()
     mock_retriever = MagicMock()
     mock_retriever.invoke.return_value = []
@@ -88,16 +88,17 @@ def test_ask_document_no_documents(mock_qdrant_client, mock_qdrant, mock_get_set
 @patch("app.api.routes.chat.Qdrant")
 @patch("qdrant_client.QdrantClient")
 def test_ask_document_qdrant_error(mock_qdrant_client, mock_qdrant, mock_get_settings):
-    """Tests error handling when Qdrant fails."""
+    """Tests error handling when Qdrant fails (Expect 503)."""
     mock_get_settings.return_value = mock_settings
     
-    # Mock Qdrant error
-    mock_qdrant.side_effect = Exception("Qdrant connection failed")
+    # Mock Qdrant error to trigger the 503 block
+    mock_qdrant_client.side_effect = Exception("Qdrant connection failed")
     
     response = client.post("/chat/ask", json={"query": "Test query"})
     
-    assert response.status_code == 500
-    assert response.json()["detail"] == "Qdrant connection failed"
+    # UPDATED: Expect 503 for infrastructure failure
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Vector Database Unavailable"
 
 @patch("app.api.routes.chat.get_settings")
 @patch("app.api.routes.chat.get_llm")
@@ -106,13 +107,11 @@ def test_ask_document_qdrant_error(mock_qdrant_client, mock_qdrant, mock_get_set
 @patch("app.api.routes.chat.ChatPromptTemplate")
 @patch("app.api.routes.chat.StrOutputParser")
 def test_ask_document_llm_error(mock_parser, mock_template, mock_qdrant_client, mock_qdrant, mock_get_llm, mock_get_settings):
-    """Tests error handling when LLM fails."""
+    """Tests error handling when LLM fails (Generic 500)."""
     mock_get_settings.return_value = mock_settings
     
-    # Mock QdrantClient
     mock_qdrant_client.return_value = MagicMock()
     
-    # Mock Qdrant
     mock_vector_store = MagicMock()
     mock_retriever = MagicMock()
     mock_docs = [MagicMock(page_content="Test content", metadata={"source": "test.pdf"})]
@@ -120,14 +119,13 @@ def test_ask_document_llm_error(mock_parser, mock_template, mock_qdrant_client, 
     mock_vector_store.as_retriever.return_value = mock_retriever
     mock_qdrant.return_value = mock_vector_store
     
-    # Mock chain with error - create proper awaitable
+    # Mock chain with error
     async def mock_ainvoke_error(*args, **kwargs):
         raise Exception("LLM failed")
     
     mock_chain = MagicMock()
     mock_chain.ainvoke = mock_ainvoke_error
     
-    # Mock the pipe operations
     mock_llm_instance = MagicMock()
     mock_llm_instance.__or__ = MagicMock(return_value=mock_chain)
     
@@ -141,4 +139,5 @@ def test_ask_document_llm_error(mock_parser, mock_template, mock_qdrant_client, 
     response = client.post("/chat/ask", json={"query": "Test query"})
     
     assert response.status_code == 500
-    assert response.json()["detail"] == "LLM failed"
+    # UPDATED: The new code catches generic errors and returns "Internal Server Error"
+    assert response.json()["detail"] == "Internal Server Error"
