@@ -12,11 +12,9 @@ class Settings(BaseSettings):
     QDRANT_URL: str = Field(default="http://qdrant:6333", description="Internal or external URL for Qdrant")
     
     # --- Embeddings ---
-    # Model used for vectorization (Must match the dimension in Qdrant)
     EMBEDDING_MODEL: str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     
     # --- LLM Selection ---
-    # Defines which "brain" the app uses. Options: "ollama", "gemini"
     LLM_PROVIDER: str = Field(default="ollama", description="Active LLM provider")
     
     # --- Ollama Specifics ---
@@ -33,11 +31,13 @@ class Settings(BaseSettings):
     RERANK_TOP_K: int = Field(default=3, description="Number of final documents to pass to the LLM")
     RETRIEVAL_TOP_K: int = Field(default=10, description="Number of initial documents to fetch from Qdrant")
 
+    # --- Resilience & Timeouts (NEW) ---
+    LLM_TIMEOUT: float = Field(default=60.0, description="Max time (seconds) to wait for LLM generation")
+    CONNECT_TIMEOUT: float = Field(default=5.0, description="Max time (seconds) to wait for service connections")
+
     class Config:
-        # Pydantic will read the .env file if it exists
         env_file = ".env"
         env_file_encoding = 'utf-8'
-        # Ignores extra variables in .env that are not defined here
         extra = "ignore" 
 
 @lru_cache()
