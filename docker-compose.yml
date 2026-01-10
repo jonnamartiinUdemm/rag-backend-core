@@ -8,8 +8,6 @@ services:
     volumes:
       - .:/app
       - ./data:/app/data
-    depends_on:
-      - ollama
     env_file:
       - .env
 
