@@ -63,7 +63,11 @@ async def ask_document(request: ChatRequest):
         # 1. Connect to Vector Store (Check availability implicitly)
         try:
             from qdrant_client import QdrantClient
-            client = QdrantClient(url=settings.QDRANT_URL, timeout=settings.CONNECT_TIMEOUT)
+            client = QdrantClient(
+                url=settings.QDRANT_URL, 
+                api_key=settings.QDRANT_API_KEY,
+                timeout=settings.CONNECT_TIMEOUT
+            )
             
             vector_store = Qdrant(
                 client=client,

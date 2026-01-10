@@ -1,4 +1,5 @@
 from app.core.celery_app import celery_app
+from app.core.config import get_settings
 from qdrant_client import QdrantClient, models
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter 
@@ -35,8 +36,8 @@ def process_document(file_path: str):
         embeddings = FastEmbedEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
         
         # Conexión a Qdrant
-        url = "http://qdrant:6333"
-        client = QdrantClient(url=url) 
+        url = settings.QDRANT_URL
+        client = QdrantClient(url=url, api_key=settings.QDRANT_API_KEY) 
         collection_name = "knowledge_base"
 
         # Verificación y creación de colección

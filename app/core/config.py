@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     
     # --- Vector DB (Qdrant) ---
     QDRANT_URL: str = Field(default="http://qdrant:6333", description="Internal or external URL for Qdrant")
-
+    QDRANT_API_KEY: str | None = Field(default=None, description="API Key for Qdrant Cloud")
     # --- Redis Configuration ---
     REDIS_URL: str = Field(default="redis://redis:6379/0", description="Redis connection URL for chat history storage")
     

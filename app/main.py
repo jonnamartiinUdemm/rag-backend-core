@@ -22,7 +22,12 @@ async def check_infrastructure():
     
     # 1. Check Qdrant
     try:
-        client = QdrantClient(url=settings.QDRANT_URL, timeout=settings.CONNECT_TIMEOUT)
+    
+        client = QdrantClient(
+            url=settings.QDRANT_URL, 
+            api_key=settings.QDRANT_API_KEY,  
+            timeout=settings.CONNECT_TIMEOUT
+        )
         client.get_collections()
         status["services"]["qdrant"] = "up"
     except Exception as e:
@@ -32,7 +37,7 @@ async def check_infrastructure():
 
     # 2. Check Redis (using default celery url logic)
     try:
-        r = Redis.from_url("redis://redis:6379/0", socket_timeout=settings.CONNECT_TIMEOUT)
+        r = Redis.from_url(settings.REDIS_URL, socket_timeout=settings.CONNECT_TIMEOUT)
         r.ping()
         status["services"]["redis"] = "up"
     except Exception as e:
