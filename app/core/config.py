@@ -1,6 +1,6 @@
 import os
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 from functools import lru_cache
 
 class Settings(BaseSettings):
@@ -40,6 +40,13 @@ class Settings(BaseSettings):
 
     # --- Chat History Management ---
     MAX_CHAT_HISTORY_LENGTH: int = Field(default=10, description="Max number of messages to retain in chat history")
+
+    @field_validator("REDIS_URL")
+    @classmethod
+    def clean_redis_url(cls, v: str) -> str:
+        if "?ssl_cert_reqs=CERT_NONE" in v:
+            return v.replace("?ssl_cert_reqs=CERT_NONE", "")
+        return v
 
     class Config:
         env_file = ".env"
