@@ -461,11 +461,6 @@ copies or substantial portions of the Software.
 <p align="center">
   Made with ❤️ using FastAPI, LangChain, and modern AI technologies
 </p>
-    }
-  ],
-  "session_id": "user-session-123"
-}
-```
 
 ---
 
