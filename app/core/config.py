@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     
     # --- Vector DB (Qdrant) ---
     QDRANT_URL: str = Field(default="http://qdrant:6333", description="Internal or external URL for Qdrant")
+
+    # --- Redis Configuration ---
+    REDIS_URL: str = Field(default="redis://redis:6379/0", description="Redis connection URL for chat history storage")
     
     # --- Embeddings ---
     EMBEDDING_MODEL: str = Field(default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
