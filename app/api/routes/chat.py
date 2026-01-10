@@ -12,6 +12,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_community.chat_message_histories import RedisChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_qdrant import Qdrant
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
@@ -37,12 +38,14 @@ if settings.COHERE_API_KEY:
 store: Dict[str, BaseChatMessageHistory] = {}
 
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
-    if session_id not in store:
-        store[session_id] = ChatMessageHistory()
-    history = store[session_id]
+    history = RedisChatMessageHistory(
+        session_id=session_id,
+        url=settings.REDIS_URL,
+        ttl=None
+    )
     if len(history.messages) > settings.MAX_CHAT_HISTORY_LENGTH:
         history.messages = history.messages[-settings.MAX_CHAT_HISTORY_LENGTH:]
-    return store[session_id]
+    return history
 
 class ChatRequest(BaseModel):
     query: str
@@ -147,3 +150,13 @@ async def ask_document(request: ChatRequest):
     except Exception as e:
         logger.error(f"Unexpected Pipeline Error: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+@router.get("/history/{session_id}", response_model=List[str])
+async def get_chat_history(session_id: str):
+    try:
+        history = get_session_history(session_id)
+        messages = [f"{msg.type}: {msg.content}" for msg in history.messages]
+        return messages
+    except Exception as e:
+        logger.error(f"Failed to retrieve chat history for session '{session_id}': {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve chat history")
