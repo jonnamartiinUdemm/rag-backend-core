@@ -1,15 +1,18 @@
 import logging
 import asyncio
 import cohere
-from typing import List
+from typing import List, Dict
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from httpx import ConnectError, ReadTimeout
 
 # LangChain & Config
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.documents import Document
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_qdrant import Qdrant
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
@@ -31,8 +34,19 @@ if settings.COHERE_API_KEY:
     except Exception as e:
         logger.warning(f"Failed to initialize Cohere: {e}")
 
+store: Dict[str, BaseChatMessageHistory] = {}
+
+def get_session_history(session_id: str) -> BaseChatMessageHistory:
+    if session_id not in store:
+        store[session_id] = ChatMessageHistory()
+    history = store[session_id]
+    if len(history.messages) > settings.MAX_CHAT_HISTORY_LENGTH:
+        history.messages = history.messages[-settings.MAX_CHAT_HISTORY_LENGTH:]
+    return store[session_id]
+
 class ChatRequest(BaseModel):
     query: str
+    session_id : str = 'default'
 
 class ChatResponse(BaseModel):
     answer: str
@@ -87,26 +101,35 @@ async def ask_document(request: ChatRequest):
         # 4. Generate Answer (With Timeouts)
         llm = get_llm()
         
-        template = """You are a helpful technical assistant. 
-        Answer the question strictly based on the provided context below.
-        
-        Context:
-        {context}
-        
-        Question:
-        {question}
-        
-        Answer:"""
-        
-        prompt = ChatPromptTemplate.from_template(template)
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are a helpful assistant. 
+                1. Use the following context to answer technical questions about the documents.
+                2. If the answer is not in the context, but is in the chat history, answer from memory.
+                3. If you don't know the answer, just say you don't know.
+                
+                Context:
+                {context}"""),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{input}")
+        ])
         chain = prompt | llm | StrOutputParser()
+
+        chain_with_history = RunnableWithMessageHistory(
+            chain,
+            get_session_history,
+            input_messages_key="input",
+            history_messages_key="chat_history"
+        )
         
         context_text = "\n\n".join(d.page_content for d in final_docs)
         
         try:
             # Enforce hard timeout for LLM generation
             async with asyncio.timeout(settings.LLM_TIMEOUT):
-                answer = await chain.ainvoke({"context": context_text, "question": request.query})
+                answer = await chain_with_history.ainvoke(
+                    {"input": request.query, "context": context_text},
+                    config={"configurable": {"session_id": request.session_id}}
+                )
         
         except asyncio.TimeoutError:
             logger.error(f"LLM Generation timed out after {settings.LLM_TIMEOUT}s")

@@ -27,8 +27,6 @@ def get_llm() -> BaseChatModel:
             model=settings.GEMINI_MODEL,
             google_api_key=settings.GOOGLE_API_KEY,
             temperature=0,
-            # Gemini transport config or handled via asyncio timeout in route
-            transport="rest"
         )
     
     else:
