@@ -58,13 +58,22 @@ async def check_infrastructure():
     # 3. Check Gemini (if enabled)
     if settings.LLM_PROVIDER == "gemini":
         try:
-            async with httpx.AsyncClient(timeout=settings.CONNECT_TIMEOUT) as client:
-                resp = await client.get(f"{settings.GOOGLE_API_KEY}/api/tags")
-                if resp.status_code == 200:
-                    status["services"]["gemini"] = "up"
-                else:
-                    status["services"]["gemini"] = "error"
-                    status["status"] = "degraded"
+            if not settings.GOOGLE_API_KEY:
+                status["services"]["gemini"] = "missing_key"
+                status["status"] = "degraded"
+            else:
+                url = "https://generativelanguage.googleapis.com/v1beta/models"
+                headers = {"x-goog-api-key": settings.GOOGLE_API_KEY}                
+                async with httpx.AsyncClient(timeout=settings.CONNECT_TIMEOUT) as client:
+                    resp = await client.get(url, headers=headers)
+                    
+                    if resp.status_code == 200:
+                        status["services"]["gemini"] = "up"
+                    else:
+                        logger.error(f"Gemini Auth Error: {resp.status_code}")
+                        status["services"]["gemini"] = "auth_error"
+                        status["status"] = "degraded"
+                        
         except Exception as e:
             logger.error(f"Health Check - Gemini Failed: {e}")
             status["services"]["gemini"] = "down"

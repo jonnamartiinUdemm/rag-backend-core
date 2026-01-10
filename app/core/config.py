@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     LLM_TIMEOUT: float = Field(default=60.0, description="Max time (seconds) to wait for LLM generation")
     CONNECT_TIMEOUT: float = Field(default=5.0, description="Max time (seconds) to wait for service connections")
 
+    # --- Chat History Management ---
+    MAX_CHAT_HISTORY_LENGTH: int = Field(default=10, description="Max number of messages to retain in chat history")
+
     class Config:
         env_file = ".env"
         env_file_encoding = 'utf-8'
