@@ -103,18 +103,40 @@ async def ask_document(request: ChatRequest):
 
         # 4. Generate Answer (With Timeouts)
         llm = get_llm()
+       
+        system_instruction_content = """You are a helpful technical assistant. 
+        1. Use the following context to answer technical questions about the documents.
+        2. If the answer is not in the context, but is in the chat history, answer from memory.
+        3. If you don't know the answer, just say you don't know.
         
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a helpful assistant. 
-                1. Use the following context to answer technical questions about the documents.
-                2. If the answer is not in the context, but is in the chat history, answer from memory.
-                3. If you don't know the answer, just say you don't know.
-                
-                Context:
-                {context}"""),
-            MessagesPlaceholder(variable_name="chat_history"),
-            ("human", "{input}")
-        ])
+        Context:
+        {context}"""
+
+        # ==============================================================================
+        # DIRTY ACKNOWLEDGMENT: GEMMA COMPATIBILITY
+        # ==============================================================================
+        # 'Gemma' models via the Google API (Free Tier) do NOT support the "system" role.
+        # Sending ("system", ...) results in a 400 API error.
+        #
+        # DIRTY WORKAROUND:
+        # If we detect that the model is 'gemma', we inject the instructions directly 
+        # into the user message ("human").
+        # For others (Gemini Pro/Flash), we use the clean architecture with the "system" role.
+        # ==============================================================================
+        
+        if "gemma" in settings.GEMINI_MODEL.lower():
+            logger.warning("⚠️ Using Gemma Compatibility Mode: Injecting System Prompt into Human Message.")
+            prompt = ChatPromptTemplate.from_messages([
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("human", f"{system_instruction_content}\n\nQuestion: {{input}}") 
+            ])
+        else:
+            # Clean Architecture (Standard for Gemini, GPT-4, Claude, etc.)
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", system_instruction_content),
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("human", "{input}")
+            ])
         chain = prompt | llm | StrOutputParser()
 
         chain_with_history = RunnableWithMessageHistory(
